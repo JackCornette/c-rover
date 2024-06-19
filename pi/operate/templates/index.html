@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+    <title>Raspberry Pi Robot Control</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #video { max-width: 100%; }
+        #controls { margin-top: 20px; }
+        #robot-info { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Raspberry Pi Robot Control</h1>
+    <img id="video" src="{{ url_for('video_feed') }}" alt="Video Stream">
+    <div id="robot-info">
+        <h2>Robot Information</h2>
+        <p>Battery Voltage: <span id="battery-voltage">--</span> V</p>
+        <p>IMU Data: X: <span id="imu-x">--</span>, Y: <span id="imu-y">--</span>, Z: <span id="imu-z">--</span></p>
+        <p>Yaw: <span id="yaw">--</span>°</p>
+        <p>Pitch: <span id="pitch">--</span>°</p>
+        <p>Roll: <span id="roll">--</span>°</p>
+        <p>Speed: <span id="speed">--</span> m/s</p>
+        <p>IP Address: <span id="ip-address">--</span></p>
+        <p>MAC Address: <span id="mac-address">--</span></p>
+        <p>RSSI: <span id="rssi">--</span> dBm</p>
+    </div>
+    <div id="controls">
+        <h2>Controls</h2>
+        <button onclick="sendControl(-0.25, -0.25)">Forward</button>
+        <button onclick="sendControl(0.25, 0.25)">Backward</button>
+        <button onclick="sendControl(0.25, -0.25)">Left</button>
+        <button onclick="sendControl(-0.25, 0.25)">Right</button>
+    </div>
+    <script>
+        const socket = io();
+
+        function sendControl(leftSpeed, rightSpeed) {
+            console.log(`Sending control command: L=${leftSpeed}, R=${rightSpeed}`);
+            socket.emit('control', { left_speed: leftSpeed, right_speed: rightSpeed });
+        }
+
+        socket.on('response', (data) => {
+            console.log('Response from server:', data);
+        });
+
+        socket.on('robot_data', (data) => {
+            document.getElementById('battery-voltage').textContent = data.V.toFixed(2);
+            document.getElementById('imu-x').textContent = data.mX;
+            document.getElementById('imu-y').textContent = data.mY;
+            document.getElementById('imu-z').textContent = data.mZ;
+            document.getElementById('yaw').textContent = data.y;
+            document.getElementById('pitch').textContent = data.p;
+            document.getElementById('roll').textContent = data.r;
+            document.getElementById('speed').textContent = data.SPEED;
+            document.getElementById('ip-address').textContent = data.IP;
+            document.getElementById('mac-address').textContent = data.MAC;
+            document.getElementById('rssi').textContent = data.RSSI;
+        });
+
+        let gamepadIndex = null;
+
+        window.addEventListener("gamepadconnected", (event) => {
+            gamepadIndex = event.gamepad.index;
+            console.log("Gamepad connected:", event.gamepad);
+        });
+
+        window.addEventListener("gamepaddisconnected", (event) => {
+            if (gamepadIndex === event.gamepad.index) {
+                gamepadIndex = null;
+                console.log("Gamepad disconnected:", event.gamepad);
+            }
+        });
+
+        function pollGamepad() {
+            if (gamepadIndex !== null) {
+                const gamepad = navigator.getGamepads()[gamepadIndex];
+                if (gamepad) {
+                    const leftStickY = gamepad.axes[1];
+                    const rightStickY = gamepad.axes[3];
+
+                    let leftSpeed = -leftStickY / 2; // Normalize to range [-0.5, 0.5]
+                    let rightSpeed = -rightStickY / 2; // Normalize to range [-0.5, 0.5]
+
+                    sendControl(leftSpeed, rightSpeed);
+                }
+            }
+            requestAnimationFrame(pollGamepad);
+        }
+
+        requestAnimationFrame(pollGamepad);
+    </script>
+</body>
+</html>
